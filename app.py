@@ -1,3 +1,4 @@
+import bcrypt
 from flask import Flask, request, jsonify
 from database import db
 from models.meals import Meal
@@ -6,7 +7,7 @@ from flask_login import LoginManager, login_user, current_user, logout_user, log
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "your_secret_key"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:admin123@127.0.0.1:3307/daily-diet'
 
 login_manager = LoginManager()
 
@@ -32,12 +33,12 @@ def login():
 
         user = User.query.filter_by(username=username).first()
 
-        if user.password == password:
+        if bcrypt.checkpw(str.encode(password), str.encode(user.password)):
             login_user(user)
             print(current_user.is_authenticated)
             return jsonify({"message": "Autenticação realizada com sucesso"})
 
-    return jsonify({"message": "Credenciais inválidas"}), 400  
+    return jsonify({"message": "Credenciais inválidas"}), 400
 
 
 
@@ -58,17 +59,20 @@ def create_user():
     password = data.get("password")
 
     if username and password:
-        user = User(username= username, password= password)
+
+        hashed_password = bcrypt.hashpw(str.encode(password), bcrypt.gensalt())
+
+        user = User(username= username, password= hashed_password)
         db.session.add(user)
         db.session.commit()
         return jsonify ({"message": "Usuário criado com sucesso"})
-    
+
     if username:
         return jsonify ({"message": "Senha inválida"}), 404
-    
+
     else:
         return jsonify ({"message": "Usuário inválido"}), 404
-    
+
 
 
 # Read user    
@@ -76,10 +80,10 @@ def create_user():
 @login_required
 def get_user(id):
     user = User.query.get(id)
-    
+
     if user:
         return {"username": user.username}
-    
+
     return jsonify({"message": "Usuário não encontrado"})
 
 # Update user 
@@ -90,11 +94,13 @@ def update_user(id):
     data = request.json
 
     if user and id == current_user.id and data.get("password"):
-        user.password = data.get("password")
+        password = data.get("password")
+        hashed_password = bcrypt.hashpw(str.encode(password), bcrypt.gensalt())
+        user.password = hashed_password
         db.session.commit()
         return jsonify ({"message": "Dados atualizados com sucesso"})
-    
-    return jsonify({"message": "Usuário não encontrado"}), 404
+
+    return jsonify({"message": "Operação não permitida"}), 404
 
 # Delete user
 @app.route('/user/<int:id>', methods=['DELETE'])
@@ -107,9 +113,9 @@ def delete_user(id):
 
     if user:
         db.session.delete(user)
-        db. it()
+        db.session.commit()
         return jsonify({"message": "Usuário deletado com sucesso"})
-    
+
     return jsonify({"message": "Usuário não encontrado"}), 404
 
 
@@ -187,9 +193,9 @@ def get_meal(id_user, id):
                 "hour": meal.hour,
                 "inTheDiet": meal.inTheDiet
             }
-        
+
         return jsonify({"message": "Refeição não encontrada"}), 404
-    
+
     return jsonify({"message": "Usuário não encontrado"}), 404
 
 
@@ -207,20 +213,20 @@ def update_meal(id_user, id):
 
         if meal:
             data = request.get_json()
-            
+
             meal.name = data["name"]
             meal.description = data["description"]
             meal.date = data["date"]
             meal.hour = data["hour"]
             meal.inTheDiet = data["inTheDiet"]
 
-            db.sesson.commit()
+            db.session.commit()
 
             return jsonify({"message": "Refeição atualizada com sucesso"})
-        
+
         return jsonify({"message": "Não foi possível encontar essa refeição"}), 404
-    
-    
+
+
     return jsonify({"message": "Usuário não encontrado"}), 404
 
 
@@ -231,22 +237,22 @@ def delete_meal(id_user, id):
     user = User.query.get(id_user)
     meal = Meal.query.get(id)
 
-    if id_user != user.id:
+    if id_user != current_user.id:
         return ({"message": "Não foi possível concluir essa operação"}), 404
 
     if user:
-       
+
         if meal:
             db.session.delete(meal)
             db.session.commit()
-            
+
             return jsonify({"message": "Refeição deletada com sucesso"})
-    
+
         return jsonify({"message": "Não foi possível encontar essa refeição"}), 404
-    
-    
+
+
     return jsonify({"message": "Usuário não encontrado"}), 404
-            
+
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -9,5 +9,4 @@ class Meal(db.Model):
     inTheDiet = db.Column(db.Boolean, nullable=False)
     id_user = db.Column(db.Integer)
 
-  
-        
+
